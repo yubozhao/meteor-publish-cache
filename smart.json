@@ -1,0 +1,9 @@
+{
+  "name": "publish-cache",
+  "description": "Extends Meteor.Collection with before/after hooks for insert/update/remove/find/findOne",
+  "homepage": "https://github.com/yubozhao/meteor-publish-cache",
+  "author": "Bozhao Yu <yubz86@gmail.com>",
+  "version": "0.1.0",
+  "git": "https://github.com/yubozhao/meteor-publish-cache.git",
+  "packages": {}
+}
