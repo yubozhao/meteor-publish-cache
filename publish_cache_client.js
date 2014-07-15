@@ -5,12 +5,12 @@ Meteor.subscribeCache = function (/*name .. [arguments] .. (callback|callbacks)*
   var methodName = '/cache/' + args.shift();
 
   if (args.length) {
-    var lastParam = params[params.length - 1];
+    var lastParam = args[args.length - 1];
     if (typeof lastParam === "function") {
-      callbacks.onReady = params.pop();
+      callbacks.onReady = args.pop();
     } else if (lastParam && (typeof lastParam.onReady === "function" ||
                              typeof lastParam.onError === "function")) {
-      callbacks = params.pop();
+      callbacks = args.pop();
     }
   };
 
