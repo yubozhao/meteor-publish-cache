@@ -1,6 +1,6 @@
 Package.describe({
   summary: 'Publish database cache.',
-  "version": "0.1.3",
+  "version": "0.2.0",
   "git": "https://github.com/dradetsky/meteor-publish-cache",
   "name": "dmr:publish-cache"
 });
