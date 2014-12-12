@@ -1,6 +1,6 @@
 Package.describe({
   summary: 'Publish database cache.',
-  "version": "0.1.2",
+  "version": "0.1.3",
   "git": "https://github.com/yubozhao/meteor-publish-cache",
   "name": "bozhao:publish-cache"
 });
