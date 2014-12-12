@@ -61,13 +61,7 @@ Meteor.subscribeCache = function (/*name .. [arguments] .. (callback|callbacks)*
           return;
         }
 
-        var existingRecord = collection.findOne({_id: doc._id});
-
-        if (existingRecord) {
-          collection.update({_id: doc._id}, {$set: _.omit(doc, '_id')});
-        } else {
-          collection.insert(doc);
-        }
+        collection.upsert({_id: doc._id}, doc);
       });
     };
 
