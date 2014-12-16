@@ -14,19 +14,40 @@ Meteor.subscribeCache = function (/*name .. [arguments] .. (callback|callbacks)*
     }
   };
 
+  var id = Random.id();
+  var subscriptionObj = {
+    id: id,
+    ready: false,
+    readyDeps: new Tracker.Dependency,
+    remove: function() {
+      // XXX: dunno about this bit
+      delete subscriptionObj;
+    },
+    stop: function() {
+      this.remove();
+    }
+  };
+
+  // Even though subscription handle methods aren't really relevant
+  // to subscribeCache, we still return them in order to be
+  // consistent with the subscribe api, and allow callers
+  // (e.g. iron:router) to use this package without breaking.
+  var handle = {
+    stop: function(){
+      subscriptionObj.stop();
+    },
+    ready: function() {
+      subscriptionObj.readyDeps.depend();
+      return subscriptionObj.ready;
+    }
+  };
+
   Meteor.apply(methodName, args, function (err, res) {
-    // Even though subscription handle methods aren't really relevant
-    // to subscribeCache, we still return them in order to be
-    // consistent with the subscribe api, and allow callers
-    // (e.g. iron:router) to use this package without breaking.
-    var handle = {
-      // there's no livedata connection, so nothing to do.
-      stop: function(){},
-      // if subscribeCache has returned, all data (if any) is stored locally.
-      ready: function() {
-        return true;
-      }
+    function finish() {
+      subscriptionObj.readyDeps.changed();
+      subscriptionObj.ready = true;
     };
+
     if (err) {
       if (callbacks.onError) {
         callbacks.onError(err);
@@ -34,6 +55,7 @@ Meteor.subscribeCache = function (/*name .. [arguments] .. (callback|callbacks)*
     }
 
     if (!_.isObject(res)) {
+      finish();
       err = new Error('Unrecognized return format');
       if (callbacks.onError) {
         callbacks.onError(err);
@@ -44,7 +66,8 @@ Meteor.subscribeCache = function (/*name .. [arguments] .. (callback|callbacks)*
       if (callbacks.onReady) {
         callbacks.onReady();
       }
-      return handle;
+      finish();
+      return;
     }
 
     var localCollections = Meteor.connection._mongo_livedata_collections;
@@ -80,8 +103,11 @@ Meteor.subscribeCache = function (/*name .. [arguments] .. (callback|callbacks)*
     if (callbacks.onReady) {
       callbacks.onReady();
     }
-    return handle;
+    finish();
+    return;
   });
+
+  return handle;
 };
 
 /*
