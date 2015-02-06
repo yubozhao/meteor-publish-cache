@@ -14,7 +14,40 @@ Meteor.subscribeCache = function (/*name .. [arguments] .. (callback|callbacks)*
     }
   };
 
+  var id = Random.id();
+  var subscriptionObj = {
+    id: id,
+    ready: false,
+    readyDeps: new Tracker.Dependency,
+    remove: function() {
+      // XXX: dunno about this bit
+      delete subscriptionObj;
+    },
+    stop: function() {
+      this.remove();
+    }
+  };
+
+  // Even though subscription handle methods aren't really relevant
+  // to subscribeCache, we still return them in order to be
+  // consistent with the subscribe api, and allow callers
+  // (e.g. iron:router) to use this package without breaking.
+  var handle = {
+    stop: function(){
+      subscriptionObj.stop();
+    },
+    ready: function() {
+      subscriptionObj.readyDeps.depend();
+      return subscriptionObj.ready;
+    }
+  };
+
   Meteor.apply(methodName, args, function (err, res) {
+    function finish() {
+      subscriptionObj.readyDeps.changed();
+      subscriptionObj.ready = true;
+    };
+
     if (err) {
       if (callbacks.onError) {
         callbacks.onError(err);
@@ -22,6 +55,7 @@ Meteor.subscribeCache = function (/*name .. [arguments] .. (callback|callbacks)*
     }
 
     if (!_.isObject(res)) {
+      finish();
       err = new Error('Unrecognized return format');
       if (callbacks.onError) {
         callbacks.onError(err);
@@ -32,6 +66,7 @@ Meteor.subscribeCache = function (/*name .. [arguments] .. (callback|callbacks)*
       if (callbacks.onReady) {
         callbacks.onReady();
       }
+      finish();
       return;
     }
 
@@ -61,21 +96,18 @@ Meteor.subscribeCache = function (/*name .. [arguments] .. (callback|callbacks)*
           return;
         }
 
-        var existingRecord = collection.findOne({_id: doc._id});
-
-        if (existingRecord) {
-          collection.update({_id: doc._id}, {$set: _.omit(doc, '_id')});
-        } else {
-          collection.insert(doc);
-        }
+        collection.upsert({_id: doc._id}, doc);
       });
     };
 
     if (callbacks.onReady) {
       callbacks.onReady();
     }
+    finish();
     return;
   });
+
+  return handle;
 };
 
 /*
