@@ -2,7 +2,7 @@ Package.describe({
   summary: 'Publish database cache.',
   "version": "0.2.0",
   "git": "https://github.com/yubozhao/meteor-publish-cache",
-  "name": "bozhao:publish-cache"
+  "name": "pub-to-cache"
 });
 
 Package.on_use(function (api) {
