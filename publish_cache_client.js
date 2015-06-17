@@ -20,7 +20,7 @@ Meteor.subscribeCache = function (/*name .. [arguments] .. (callback|callbacks)*
    */
   var alreadyCached = false;
   cachedSubs[methodName] = cachedSubs[methodName] || [];
-  thisSubs = cachedSubs[methodName];
+  var thisSubs = cachedSubs[methodName];
 
   var argsStr = JSON.stringify(args);
   var subscriptionObj = _.findWhere(thisSubs, {args: argsStr});
@@ -71,7 +71,8 @@ Meteor.subscribeCache = function (/*name .. [arguments] .. (callback|callbacks)*
       return subscriptionObj.ready;
     },
     cache: function(sec) {
-      subscriptionObj.sec = sec;
+      subscriptionObj.cache(sec);
+      return this;
     }
   };
   
