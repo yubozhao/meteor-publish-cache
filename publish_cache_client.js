@@ -183,17 +183,17 @@ Meteor.default_connection._livedata_data = function (msg) {
     }
   }
 
-  // // If we get a remove msg, check if the doc is cached or not. For all cached documents we have set the key
-  // // subCacheCached = true. Just don't apply the msg and thats it.
-  // if (!serverDoc && msg.msg == 'removed') {
-  //   var localCollection = Meteor.default_connection._mongo_livedata_collections[msg.collection];
-  //   if (localCollection) {
-  //     var existingDoc = localCollection.findOne({_id: msg.id, subCacheCached: true });
-  //     if (existingDoc) {
-  //       return;
-  //     }
-  //   }
-  // }
+  // If we get a remove msg, check if the doc is cached or not. For all cached documents we have set the key
+  // subCacheCached = true. Just don't apply the msg and thats it.
+  if (!serverDoc && msg.msg == 'removed') {
+    var localCollection = Meteor.default_connection._mongo_livedata_collections[msg.collection];
+    if (localCollection) {
+      var existingDoc = localCollection.findOne({_id: msg.id, subCacheCached: true });
+      if (existingDoc) {
+        return;
+      }
+    }
+  }
 
   return originalLiveDataData.call(this, msg);
 };

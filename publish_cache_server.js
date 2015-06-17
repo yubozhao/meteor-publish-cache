@@ -11,7 +11,6 @@ Meteor.publishCache = function (name, func, options) {
       this.unblock();
 
     try {
-      console.log('-------------', arguments);
       var returnCursors = func.apply(this, arguments);
       var results = {};
 
