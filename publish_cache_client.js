@@ -1,3 +1,4 @@
+var cachedSubs = {};
 Meteor.subscribeCache = function (/*name .. [arguments] .. (callback|callbacks)*/) {
   var args = _.toArray(arguments);
   var callbacks = {};
@@ -14,19 +15,48 @@ Meteor.subscribeCache = function (/*name .. [arguments] .. (callback|callbacks)*
     }
   };
 
-  var id = Random.id();
-  var subscriptionObj = {
-    id: id,
-    ready: false,
-    readyDeps: new Tracker.Dependency,
-    remove: function() {
-      // XXX: dunno about this bit
-      delete subscriptionObj;
-    },
-    stop: function() {
-      this.remove();
+  /**
+   * We set up our CachedSubs information based on request
+   */
+  var alreadyCached = false;
+  cachedSubs[methodName] = cachedSubs[methodName] || [];
+  var thisSubs = cachedSubs[methodName];
+
+  var argsStr = JSON.stringify(args);
+  var subscriptionObj = _.findWhere(thisSubs, {args: argsStr});
+  var timestamp = Math.floor(new Date().getTime() / 1000);
+
+  if (subscriptionObj &&
+   (subscriptionObj.sec + subscriptionObj.timestamp) > timestamp) {
+    alreadyCached = true;
+  } else {
+    // We are going to create a new subscriptionObj,
+    // so lets remove the old one, if it exists
+    if (subscriptionObj) {
+      var index = thisSubs.indexOf(subscriptionObj);
+      if (index > -1) thisSubs.splice(index, 1);
     }
-  };
+
+    var id = Random.id();
+    subscriptionObj = {
+      id: id,
+      sec: 0,
+      timestamp: timestamp,
+      ready: false,
+      args: JSON.stringify(args),
+      readyDeps: new Tracker.Dependency,
+      remove: function() {
+        
+      },
+      stop: function() {
+        
+      },
+      cache: function(sec) {
+        this.sec = sec;
+      }
+    }
+  }
+
 
   // Even though subscription handle methods aren't really relevant
   // to subscribeCache, we still return them in order to be
@@ -39,73 +69,88 @@ Meteor.subscribeCache = function (/*name .. [arguments] .. (callback|callbacks)*
     ready: function() {
       subscriptionObj.readyDeps.depend();
       return subscriptionObj.ready;
+    },
+    cache: function(sec) {
+      subscriptionObj.cache(sec);
+      return this;
     }
   };
-
-  Meteor.apply(methodName, args, function (err, res) {
-    function finish() {
-      subscriptionObj.readyDeps.changed();
-      subscriptionObj.ready = true;
-    };
-
-    if (err) {
-      if (callbacks.onError) {
-        callbacks.onError(err);
-      }
+  
+  if (alreadyCached) {
+    if (callbacks.onReady) {
+      callbacks.onReady();
     }
 
-    if (!_.isObject(res)) {
-      finish();
-      err = new Error('Unrecognized return format');
-      if (callbacks.onError) {
-        callbacks.onError(err);
-      }
-    }
+    subscriptionObj.readyDeps.changed();
+    subscriptionObj.ready = true;
+  } else {
+    Meteor.apply(methodName, args, function (err, res) {
+      function finish() {
+        subscriptionObj.readyDeps.changed();
+        subscriptionObj.ready = true;
+        subscriptionObj.timestamp = Math.floor(new Date().getTime() / 1000 );
+        cachedSubs[methodName].push(subscriptionObj);
+      };
 
-    if (_.isEmpty(res)) {
+      if (err) {
+        if (callbacks.onError) {
+          callbacks.onError(err);
+        }
+      }
+
+      if (!_.isObject(res)) {
+        finish();
+        err = new Error('Unrecognized return format');
+        if (callbacks.onError) {
+          callbacks.onError(err);
+        }
+      }
+
+      if (_.isEmpty(res)) {
+        if (callbacks.onReady) {
+          callbacks.onReady();
+        }
+        finish();
+        return;
+      }
+
+      var localCollections = Meteor.connection._mongo_livedata_collections;
+      for (collectionName in res) {
+        var docs = res[collectionName];
+        var collection = localCollections[collectionName];
+
+        //We do not handle collection that does not exist on the client.
+        if (!collection) {
+          console.error('Collection "' + collectionName + '" does not exist in local collection.');
+          continue;
+        }
+
+        if (! _.isArray(docs)) {
+          console.error('Unrecognized document format.');
+          continue;
+        }
+
+        docs.forEach(function (doc) {
+          if (!doc) {
+            return;
+          }
+
+          if (!doc._id) {
+            console.error('Return document does not contain _id field.');
+            return;
+          }
+          doc.subCacheCached = true;
+          collection.upsert({_id: doc._id}, doc);
+        });
+      };
+
       if (callbacks.onReady) {
         callbacks.onReady();
       }
       finish();
       return;
-    }
-
-    var localCollections = Meteor.connection._mongo_livedata_collections;
-    for (collectionName in res) {
-      var docs = res[collectionName];
-      var collection = localCollections[collectionName];
-
-      //We do not handle collection that does not exist on the client.
-      if (!collection) {
-        console.error('Collection "' + collectionName + '" does not exist in local collection.');
-        continue;
-      }
-
-      if (! _.isArray(docs)) {
-        console.error('Unrecognized document format.');
-        continue;
-      }
-
-      docs.forEach(function (doc) {
-        if (!doc) {
-          return;
-        }
-
-        if (!doc._id) {
-          console.error('Return document does not contain _id field.');
-          return;
-        }
-
-        collection.upsert({_id: doc._id}, doc);
-      });
-    };
-
-    if (callbacks.onReady) {
-      callbacks.onReady();
-    }
-    finish();
-    return;
-  });
+    });
+  }
 
   return handle;
 };
@@ -134,6 +179,18 @@ Meteor.default_connection._livedata_data = function (msg) {
         msg.fields = $.extend(true, existingDoc, msg.fields);
         delete msg.fields._id;
         msg.msg = "changed";
+      }
+    }
+  }
+
+  // If we get a remove msg, check if the doc is cached or not. For all cached documents we have set the key
+  // subCacheCached = true. Just don't apply the msg and thats it.
+  if (!serverDoc && msg.msg == 'removed') {
+    var localCollection = Meteor.default_connection._mongo_livedata_collections[msg.collection];
+    if (localCollection) {
+      var existingDoc = localCollection.findOne({_id: msg.id, subCacheCached: true });
+      if (existingDoc) {
+        return;
       }
     }
   }
