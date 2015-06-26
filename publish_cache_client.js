@@ -40,7 +40,7 @@ Meteor.subscribeCache = function (/*name .. [arguments] .. (callback|callbacks)*
     var id = Random.id();
     subscriptionObj = {
       id: id,
-      sec: 0,
+      sec: 5,
       timestamp: timestamp,
       ready: false,
       args: JSON.stringify(args),
@@ -54,7 +54,9 @@ Meteor.subscribeCache = function (/*name .. [arguments] .. (callback|callbacks)*
       cache: function(sec) {
         this.sec = sec;
       }
-    }
+    };
+
+    cachedSubs[methodName].push(subscriptionObj);
   }
 
 
@@ -89,8 +91,7 @@ Meteor.subscribeCache = function (/*name .. [arguments] .. (callback|callbacks)*
         subscriptionObj.readyDeps.changed();
         subscriptionObj.ready = true;
         subscriptionObj.timestamp = Math.floor(new Date().getTime() / 1000 );
-        cachedSubs[methodName].push(subscriptionObj);
-      };
+      }
 
       if (err) {
         if (callbacks.onError) {
